@@ -1,0 +1,9 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    {% if is_granted('IS_AUTHENTICATED_FULLY') %}
+        <p>You are connected as <strong>{{ app.user.username}}</strong></p>
+    {% else %}
+        <a href="{{ url('app_login') }}">login</a>
+    {% endif %}
+    <p>Request from <strong>{{ server }}</strong></p>
+{% endblock %}

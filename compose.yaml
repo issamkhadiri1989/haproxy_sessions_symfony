@@ -1,0 +1,148 @@
+services:
+#### Frontal 2 : 192.168.0.22
+    frontal-server-2:
+        container_name: frontal-server-2
+        build:
+            context: ./infra/web
+            args:
+                BUILD_ARGUMENT_ENV: dev
+            dockerfile: ./nginx/Dockerfile
+        restart: always
+        ports:
+            - "9002:80"
+            - "4432:443"
+        expose:
+            - 80
+        volumes:
+            - ./src:/var/www/html:ro,cached
+            - ./infra/web/nginx/frontal002:/etc/nginx/conf.d
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.22
+    source-server-2:
+        build:
+            context: ./infra/web
+            dockerfile: ./php/Dockerfile
+        volumes:
+            - ./src:/var/www/html:cached
+            - ./infra/web/php/php-fpm.d/www.conf:/usr/local/etc/php-fpm.d/www.conf
+            - ./infra/web/php/config/php.ini:/usr/local/etc/php/php.ini
+            - ./infra/web/php/xdebug/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.66
+        expose:
+            - "9000"
+            - "9003"
+
+#### Frontal 1 : 192.168.0.11
+    frontal-server-1:
+        container_name: frontal-server-1
+        build:
+            context: ./infra/web
+            args:
+                BUILD_ARGUMENT_ENV: dev
+            dockerfile: ./nginx/Dockerfile
+        restart: always
+        ports:
+            - "9001:80"
+            - "4431:443"
+        expose:
+            - 80
+        volumes:
+            - ./src:/var/www/html:ro,cached
+            - ./infra/web/nginx/frontal001:/etc/nginx/conf.d
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.11
+    source-server-1:
+        build:
+            context: ./infra/web
+            dockerfile: ./php/Dockerfile
+        volumes:
+            - ./src:/var/www/html:cached
+            - ./infra/web/php/php-fpm.d/www.conf:/usr/local/etc/php-fpm.d/www.conf
+            - ./infra/web/php/config/php.ini:/usr/local/etc/php/php.ini
+            - ./infra/web/php/xdebug/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.77
+        expose:
+            - "9000"
+            - "9003"
+
+#### The load balancer
+    haproxy:
+        build: ./infra/haproxy
+        ports:
+            - 80:80
+        expose:
+            - 80
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.44
+        environment:
+            - APACHE_1_IP=192.168.0.11
+            - APACHE_2_IP=192.168.0.22
+            - APACHE_EXPOSED_PORT=80
+
+#### Database
+    database:
+        image: mysql
+        platform: linux/x86_64
+        command: --innodb-use-native-aio=${INNODB_USE_NATIVE_AIO:-1} --sql_mode=${SQL_MODE:-"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"}
+        environment:
+            MYSQL_ROOT_PASSWORD: secret
+            MYSQL_DATABASE: symfony
+        ports:
+            - "3306:3306"
+        volumes:
+            - mysql:/var/lib/mysql:delegated
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.100
+    myadmin:
+        image: phpmyadmin/phpmyadmin:5
+        environment:
+            PMA_HOST: database
+        ports:
+            - "8080:80"
+        depends_on:
+            - database
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.101
+        volumes:
+            - db_admin_data:/var/www/html
+
+#### Redis
+    redis:
+        image: redis:latest
+        ports:
+            - "6379:6379"
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.102
+    redis-commander:
+        image: rediscommander/redis-commander:latest
+        environment:
+            - REDIS_HOSTS=local:redis:6379
+        ports:
+            - "8083:8081"
+        networks:
+            public_net:
+                ipv4_address: 192.168.0.103
+
+volumes:
+    db_admin_data:
+    mysql:
+    mysql_user:
+    esdata:
+
+networks:
+    public_net:
+        driver: bridge
+        ipam:
+            driver: default
+            config:
+                - subnet: 192.168.0.0/24
